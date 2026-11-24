@@ -1,8 +1,15 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api/vehicles';
+const API_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/vehicles` : "https://vehicle-rental-backend-n8fa.onrender.com/api/vehicles";
 
-const getToken = () => JSON.parse(localStorage.getItem('userInfo'))?.token;
+const getToken = () => {
+  try {
+    const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+    return userInfo?.token || localStorage.getItem('token');
+  } catch {
+    return localStorage.getItem('token');
+  }
+};
 
 const config = () => ({ headers: { Authorization: `Bearer ${getToken()}` } });
 

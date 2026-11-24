@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { Search, MapPin, Users, Fuel, Cog, ArrowRight, IndianRupee, RotateCcw } from 'lucide-react';
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const BASE_URL = import.meta.env.VITE_BACKEND_URL || "https://vehicle-rental-backend-n8fa.onrender.com";
+const API_URL = import.meta.env.VITE_API_URL || `${BASE_URL}/api`;
 
 export default function Home() {
   const [vehicles, setVehicles] = useState([]);
@@ -33,7 +34,7 @@ export default function Home() {
       if (minPrice!== '') params.minPrice = Number(minPrice);
       if (maxPrice!== '') params.maxPrice = Number(maxPrice);
 
-      const { data } = await axios.get(`${API_URL}/api/vehicles`, { params });
+      const { data } = await axios.get(`${API_URL}/vehicles`, { params });
       setVehicles(data.vehicles || []);
       setTotalPages(data.totalPages || 1);
     } catch (err) {
@@ -45,7 +46,7 @@ export default function Home() {
 
   const fetchCategories = async () => {
     try {
-      const { data } = await axios.get(`${API_URL}/api/categories`);
+      const { data } = await axios.get(`${API_URL}/categories`);
       setCategories(Array.isArray(data)? data : data.categories || []);
     } catch {}
   };
@@ -71,6 +72,30 @@ export default function Home() {
     setSearch(''); setCategory(''); setLocation(''); setFuelType('');
     setTransmission(''); setMinPrice(''); setMaxPrice(''); setSort(''); setPage(1);
     setTimeout(() => { window.location.reload(); }, 100);
+  };
+
+  // --- FIXED IMAGE LOGIC - NO DELETION, ONLY FIX ---
+  const getImageUrl = (vehicle) => {
+    const img = vehicle?.images?.[0] || vehicle?.image || "";
+    if (img.startsWith('http')) return img;
+    if (img) {
+      const fileName = img.split('/').pop();
+      if (fileName && fileName.includes('.')) return `/cars/${fileName}`;
+    }
+    const name = (vehicle?.name || "").toLowerCase();
+    if (name.includes('bmw')) return '/cars/bmw.jpg';
+    if (name.includes('swift')) return '/cars/swift.jpg';
+    if (name.includes('baleno')) return '/cars/baleno.jpg';
+    if (name.includes('thar')) return '/cars/thar.jpg';
+    if (name.includes('nexon')) return '/cars/nexon.jpg';
+    if (name.includes('city')) return '/cars/city.jpg';
+    if (name.includes('creta')) return '/cars/creta.jpg';
+    if (name.includes('fortuner')) return '/cars/fortuner.jpg';
+    if (name.includes('innova')) return '/cars/innova.jpg';
+    if (name.includes('scorpio')) return '/cars/scorpio.jpg';
+    if (name.includes('alto')) return '/cars/alto.jpg';
+    if (name.includes('ertiga')) return '/cars/ertiga.jpg';
+    return '/cars/bmw.jpg';
   };
 
   return (
@@ -164,13 +189,9 @@ export default function Home() {
               <div key={v._id} className="group bg-white rounded-[18px] overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
                 <div className="relative h-[185px] bg-slate-100 overflow-hidden">
                   <img
-                    src={v.images?.[0]}
+                    src={getImageUrl(v)}
                     alt={v.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition duration-700"
-                    onError={(e) => {
-                      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='800' height='600'><rect width='100%' height='100%' fill='#0a1931'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='Arial' font-size='40' font-weight='bold'>${v.name}</text></svg>`;
-                      e.currentTarget.src = `data:image/svg+xml,${encodeURIComponent(svg)}`;
-                    }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
                   <span className="absolute top-3 left-3 bg-[#22c55e] text-white text-[8px] font-black px-2.5 py-1 rounded-full tracking-widest">{v.status || 'Available'}</span>

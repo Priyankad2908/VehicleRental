@@ -3,6 +3,9 @@ import axios from 'axios';
 
 const AuthContext = createContext();
 
+// Home.jsx jaisa fix - Vite wala + Render fallback
+const API_URL = import.meta.env.VITE_API_URL || "https://vehicle-rental-backend-n8fa.onrender.com/api";
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
@@ -15,7 +18,6 @@ export const AuthProvider = ({ children }) => {
     if (userInfo && userInfo !== "undefined") {
       try {
         const parsed = JSON.parse(userInfo);
-        
         setUser(parsed.user || parsed);
       } catch {}
     }
@@ -26,13 +28,12 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
-    const { data } = await axios.post('http://localhost:5000/api/users/login', { email, password });
-    
-    
+    const { data } = await axios.post(`${API_URL}/users/login`, { email, password });
+
     const actualUser = data.user || data;
     const actualToken = data.token || actualUser.token;
 
-    console.log("LOGIN RESPONSE:", data); 
+    console.log("LOGIN RESPONSE:", data);
     console.log("USER ROLE:", actualUser.role);
 
     setUser(actualUser);
@@ -43,7 +44,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (name, email, phone, password) => {
-    const { data } = await axios.post('http://localhost:5000/api/users/register', { name, email, phone, password });
+    const { data } = await axios.post(`${API_URL}/users/register`, { name, email, phone, password });
     const actualUser = data.user || data;
     const actualToken = data.token || actualUser.token;
 

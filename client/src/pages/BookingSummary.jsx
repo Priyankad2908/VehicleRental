@@ -5,7 +5,23 @@ import { MapPin, Calendar, ArrowLeft, ShieldCheck, Clock, Fuel, Users, Tag, X, E
 import { useState } from 'react';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) || process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+const getToken = () => {
+  try {
+    const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+    return userInfo?.token || localStorage.getItem('token');
+  } catch {
+    return localStorage.getItem('token');
+  }
+};
+
+const LOCAL_COUPONS = {
+  'WELCOME10': { type: 'percent', value: 10 },
+  'FLAT200': { type: 'flat', value: 200 },
+  'FLAT500': { type: 'flat', value: 500 },
+  'FIRST50': { type: 'percent', value: 50 },
+};
 
 const BookingSummary = () => {
   const { state } = useLocation();
@@ -32,23 +48,42 @@ const BookingSummary = () => {
   const subtotal = days * (vehicle.pricePerDay || 0);
   const total = Math.max(subtotal - discount, 0);
   const locationQuery = vehicle.location || "Wardha, Maharashtra";
-  const mapSrc = `https://maps.google.com/maps?q=${encodeURIComponent(locationQuery)}&z=14&output=embed`;
   const gmapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationQuery)}`;
+  // FIX - Google Map Embed - Har city ka apna map dikhega
+  const osmSrc = `https://maps.google.com/maps?q=${encodeURIComponent(locationQuery + ', Maharashtra, India')}&output=embed`;
+  const osmLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationQuery)}`;
 
   const applyCoupon = async () => {
     if(!couponCode.trim()) return toast.error("Enter coupon code");
+    const code = couponCode.trim().toUpperCase();
     setCouponLoading(true);
+    const local = LOCAL_COUPONS[code];
+    if (local) {
+      const d = local.type === 'percent' ? Math.round(subtotal * local.value / 100) : local.value;
+      setDiscount(d);
+      setAppliedCode(code);
+      setCouponLoading(false);
+      toast.success(`${code} Applied! ₹${d} OFF`);
+      return;
+    }
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await axios.post(`${API_URL}/coupons/validate`, {
-        code: couponCode.toUpperCase(),
+        code: code,
         totalAmount: subtotal
       }, { headers: { Authorization: `Bearer ${token}` } });
-      setDiscount(res.data.discount);
-      setAppliedCode(couponCode.toUpperCase());
-      toast.success(`${couponCode.toUpperCase()} Applied! ₹${res.data.discount} OFF`);
+      const disc = res.data.discount || res.data.discountAmount || res.data.amount || 0;
+      if (disc > 0) {
+        setDiscount(disc);
+        setAppliedCode(code);
+        toast.success(`${code} Applied! ₹${disc} OFF`);
+      } else {
+        toast.error("Invalid coupon");
+        setDiscount(0);
+        setAppliedCode('');
+      }
     } catch (e) {
-      toast.error(e.response?.data?.message || "Invalid coupon");
+      toast.error("Invalid coupon - Try WELCOME10 or FLAT200");
       setDiscount(0);
       setAppliedCode('');
     } finally { setCouponLoading(false); }
@@ -64,7 +99,7 @@ const BookingSummary = () => {
   const confirm = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       if (!token) {
         toast.error('Please login first');
         navigate('/login');
@@ -75,14 +110,17 @@ const BookingSummary = () => {
         pickupDate,
         returnDate,
         pickupLocation: vehicle.location,
-        couponCode: appliedCode || undefined
-      }, { headers: { Authorization: `Bearer ${token}` } });
+        couponCode: appliedCode || undefined,
+        totalAmount: total,
+        discount: discount,
+      }, { headers: { Authorization: `Bearer ${token}` }, timeout: 60000 });
       localStorage.setItem('lastBooking', JSON.stringify(res.data.booking || res.data));
       toast.success('Booking Confirmed! 🎉');
       const bookingId = res.data.booking?._id || res.data._id;
       navigate(`/booking-confirmation/${bookingId}`, { state: res.data.booking || res.data });
     } catch (e) {
-      toast.error(e.response?.data?.message || 'Booking failed - Dates overlapping');
+      console.log('Booking Error:', e.response?.data);
+      toast.error(e.response?.data?.message || e.message || 'Booking failed - Try again');
     } finally { setLoading(false); }
   };
 
@@ -131,13 +169,13 @@ const BookingSummary = () => {
                 </div>
               </div>
 
-              {/* GOOGLE MAPS SECTION ADDED */}
+              {/* MAP - Google Maps Embed */}
               <div className="mt-5 rounded-[20px] overflow-hidden border border-slate-200 shadow-sm">
                 <div className="bg-slate-900 text-white px-4 py-3 flex justify-between items-center">
                   <p className="text-[11px] font-black tracking-widest flex items-center gap-2"><Navigation size={14} className="text-blue-400"/> PICKUP LOCATION - {locationQuery.toUpperCase()}</p>
                   <a href={gmapLink} target="_blank" rel="noreferrer" className="bg-white text-slate-900 text-[10px] font-black px-3 py-1.5 rounded-full flex items-center gap-1 hover:bg-slate-100"><ExternalLink size={12}/> Open in Google Maps</a>
                 </div>
-                <iframe title="pickup-map" src={mapSrc} width="100%" height="300" style={{ border: 0 }} loading="lazy" referrerPolicy="no-referrer-when-downgrade"></iframe>
+                <iframe title="pickup-map" src={osmSrc} width="100%" height="300" style={{ border: 0 }} loading="lazy"></iframe>
                 <div className="bg-[#f8fafc] px-4 py-2.5 flex items-center gap-2 text-[11px] text-slate-600"><MapPin size={12} className="text-blue-600"/><span className="font-bold">{locationQuery}</span><span className="text-slate-400">• Free pickup available • Live location verified</span></div>
               </div>
 
@@ -170,7 +208,7 @@ const BookingSummary = () => {
                     <button onClick={removeCoupon} className="text-green-700 hover:bg-green-100 p-1 rounded-full"><X size={14}/></button>
                   </div>
                 )}
-                <p className="text-[10px] text-gray-400 mt-1.5">Try: WELCOME10 (10% off) or FLAT200</p>
+                <p className="text-[10px] text-gray-400 mt-1.5">Try: WELCOME10 (10% off) or FLAT200 (₹200 off)</p>
               </div>
 
               {discount > 0 && (
